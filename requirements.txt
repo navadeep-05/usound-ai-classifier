@@ -1,1 +1,6 @@
-Binary file requirements.txt matches
+flask
+flask-cors
+librosa
+soundfile
+numpy
+gunicorn
