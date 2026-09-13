@@ -1,3 +1,5 @@
+torch.set_num_threads(1)
+
 import os
 import tempfile
 import numpy as np
