@@ -1,0 +1,1353 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>U-SOUND AI</title>
+  <meta name="description"
+    content="Classify urban city sounds using a deep learning ResNet18 model. Upload audio and get instant predictions for 10 sound categories." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+    rel="stylesheet" />
+  <style>
+    /* ===== RESET & BASE ===== */
+    *,
+    *::before,
+    *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg-primary: #0a0a1a;
+      /* deep dark */
+      --bg-secondary: #111827;
+      /* keep existing */
+      --bg-card: rgba(17, 24, 39, 0.45);
+      --bg-card-hover: rgba(24, 34, 56, 0.75);
+      --glass-border: rgba(255, 255, 255, 0.08);
+      --glass-border-hover: rgba(255, 255, 255, 0.15);
+      --text-primary: #f1f5f9;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --accent: #6366f1;
+      --accent-light: #818cf8;
+      --accent-glow: rgba(99, 102, 241, 0.35);
+      --success: #22d3ee;
+      --success-glow: rgba(34, 211, 238, 0.25);
+      --warning: #fbbf24;
+      --danger: #f43f5e;
+      --radius-sm: 10px;
+      --radius-md: 16px;
+      --radius-lg: 24px;
+      --radius-xl: 32px;
+      --transition: 0.25s ease;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      overflow-x: hidden;
+      line-height: 1.6;
+
+      /* ===== SECTION VERTICAL SPACING ===== */
+      body>div+div,
+      body>section+section,
+      h2,
+      h3 {
+        margin-top: 50px;
+        /* Pushes the sections downwards */
+      }
+
+      /* Keeps individual grid elements inside the sections clean */
+      .card h2,
+      .card h3,
+      div div h2,
+      div div h3 {
+        margin-top: 0;
+      }
+
+      /* ===== ANIMATED BACKGROUND ===== */
+      .bg-canvas {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+      }
+
+      /* Gradient orbs */
+      .orb {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(100px);
+        opacity: 0.15;
+        animation: orbFloat 20s ease-in-out infinite alternate;
+      }
+
+      .orb-1 {
+        width: 600px;
+        height: 600px;
+        background: #6366f1;
+        top: -10%;
+        left: -5%;
+        animation-delay: 0s;
+      }
+
+      .orb-2 {
+        width: 500px;
+        height: 500px;
+        background: #22d3ee;
+        bottom: -15%;
+        right: -10%;
+        animation-delay: -7s;
+      }
+
+      .orb-3 {
+        width: 400px;
+        height: 400px;
+        background: #a855f7;
+        top: 40%;
+        left: 50%;
+        animation-delay: -14s;
+      }
+
+      @keyframes orbFloat {
+        0% {
+          transform: translate(0, 0) scale(1);
+        }
+
+        33% {
+          transform: translate(30px, -40px) scale(1.1);
+        }
+
+        66% {
+          transform: translate(-20px, 20px) scale(0.95);
+        }
+
+        100% {
+          transform: translate(10px, -10px) scale(1.05);
+        }
+      }
+
+      /* ===== LAYOUT ===== */
+      .app-container {
+        position: relative;
+        z-index: 1;
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 40px 24px 80px;
+      }
+
+      /* ===== HEADER ===== */
+      .header {
+        text-align: center;
+        margin-bottom: 48px;
+        animation: fadeUp 0.8s ease-out both;
+      }
+
+      .header__badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 16px;
+        background: rgba(99, 102, 241, 0.12);
+        border: 1px solid rgba(99, 102, 241, 0.25);
+        border-radius: 100px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--accent-light);
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        margin-bottom: 20px;
+      }
+
+      .header__badge .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--success);
+        box-shadow: 0 0 8px var(--success);
+        animation: pulse 2s ease-in-out infinite;
+      }
+
+      @keyframes pulse {
+
+        0%,
+        100% {
+          opacity: 1;
+        }
+
+        50% {
+          opacity: 0.4;
+        }
+      }
+
+      .header h1 {
+        font-size: clamp(2rem, 5vw, 3.2rem);
+        font-weight: 900;
+        letter-spacing: -1.5px;
+        background: linear-gradient(135deg, #f1f5f9 0%, #818cf8 50%, #22d3ee 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        line-height: 1.25;
+        margin-bottom: 24px;
+      }
+
+      .header h1 {
+        /* …existing styles… */
+        margin-bottom: 24px;
+        /* increased spacing */
+        width: 100%;
+        /* full‑width header */
+      }
+
+      .header p {
+        font-size: 1.05rem;
+        color: var(--text-secondary);
+        max-width: 950px;
+        margin: 0 auto;
+        text-wrap: balance;
+      }
+
+      /* ===== GLASS CARD ===== */
+      .card {
+        background: var(--bg-card);
+        backdrop-filter: blur(24px) saturate(1.3);
+        -webkit-backdrop-filter: blur(24px) saturate(1.3);
+        border: 1px solid var(--glass-border);
+        border-radius: var(--radius-lg);
+
+        /* Updated styling to wrap tightly around the content */
+        padding: 24px 32px;
+        /* Slightly reduced top/bottom padding for a better fit */
+        height: auto;
+        /* Forces the container to rely purely on content height */
+        min-height: 0;
+        /* Removes any restrictive minimum heights if inherited */
+        display: block;
+        /* Ensures standard block formatting context */
+        transition: border-color var(--transition), box-shadow var(--transition);
+      }
+
+      .card:hover {
+        border-color: var(--glass-border-hover);
+        box-shadow: 0 8px 40px rgba(0, 0, 0, 0.25);
+      }
+
+      /* ==== SPINNER ==== */
+      .spinner {
+        display: inline-block;
+        width: 1em;
+        height: 1em;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        vertical-align: middle;
+        margin-right: 0.5rem;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* ==== OVERLAY ==== */
+      .overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+      }
+
+      .overlay.hidden {
+        display: none;
+      }
+
+      /* ===== UPLOAD ZONE ===== */
+      .upload-section {
+        animation: fadeUp 0.8s 0.15s ease-out both;
+      }
+
+      .upload-zone {
+        position: relative;
+        border: 2px dashed rgba(99, 102, 241, 0.3);
+        border-radius: var(--radius-lg);
+        padding: 56px 32px;
+        text-align: center;
+        cursor: pointer;
+        transition: all var(--transition);
+        background: rgba(99, 102, 241, 0.03);
+        overflow: hidden;
+      }
+
+      .upload-zone::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(ellipse at center, rgba(99, 102, 241, 0.08) 0%, transparent 70%);
+        opacity: 0;
+        transition: opacity var(--transition);
+      }
+
+      .upload-zone:hover,
+      .upload-zone.dragover {
+        border-color: var(--accent);
+        background: rgba(99, 102, 241, 0.06);
+        box-shadow: 0 0 40px var(--accent-glow);
+      }
+
+      .upload-zone:hover::before,
+      .upload-zone.dragover::before {
+        opacity: 1;
+      }
+
+      .upload-zone__icon {
+        width: 72px;
+        height: 72px;
+        margin: 0 auto 20px;
+        border-radius: var(--radius-md);
+        background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(34, 211, 238, 0.1));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 32px;
+        transition: transform var(--transition);
+      }
+
+      .upload-zone:hover .upload-zone__icon {
+        transform: translateY(-4px) scale(1.08);
+      }
+
+      .upload-zone h3 {
+        font-size: 1.15rem;
+        font-weight: 600;
+        margin-bottom: 8px;
+        color: var(--text-primary);
+      }
+
+      .upload-zone p {
+        font-size: 0.88rem;
+        color: var(--text-muted);
+      }
+
+      .upload-zone .browse-link {
+        color: var(--accent-light);
+        font-weight: 600;
+        text-decoration: underline;
+        text-underline-offset: 3px;
+      }
+
+      #audioFileInput {
+        display: none;
+      }
+
+      /* File info bar */
+      .file-info {
+        display: none;
+        align-items: center;
+        gap: 14px;
+        margin-top: 20px;
+        padding: 16px 20px;
+        background: rgba(99, 102, 241, 0.07);
+        border: 1px solid rgba(99, 102, 241, 0.18);
+        border-radius: var(--radius-md);
+        animation: fadeUp 0.4s ease-out both;
+      }
+
+      .file-info.show {
+        display: flex;
+      }
+
+      .file-info__icon {
+        font-size: 28px;
+      }
+
+      .file-info__details {
+        flex: 1;
+      }
+
+      .file-info__name {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+
+      .file-info__size {
+        font-size: 0.78rem;
+        color: var(--text-muted);
+      }
+
+      .file-info__remove {
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        background: rgba(244, 63, 94, 0.1);
+        border: 1px solid rgba(244, 63, 94, 0.2);
+        color: var(--danger);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        transition: all var(--transition);
+      }
+
+      .file-info__remove:hover {
+        background: rgba(244, 63, 94, 0.2);
+        transform: scale(1.1);
+      }
+
+      /* Waveform canvas */
+      .waveform-container {
+        display: none;
+        margin-top: 20px;
+        border-radius: var(--radius-md);
+        overflow: hidden;
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid var(--glass-border);
+      }
+
+      .waveform-container.show {
+        display: block;
+      }
+
+      /* Model Details styling similar to waveform */
+      .model-info-section {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  margin-top: 20px;
+  animation: fadeUp 0.8s ease-out both;
+  width: 100%;
+  box-sizing: border-box;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.model-info-section h3 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+
+/* Hover effect for Model Details */
+.model-info-section:hover {
+  border-color: var(--accent);
+  box-shadow: 0 8px 30px rgba(99, 102, 241, 0.4);
+}
+
+      }
+
+      #waveformCanvas {
+        width: 100%;
+        height: 100px;
+        display: block;
+      }
+
+      /* Audio player */
+      .audio-player-wrapper {
+        display: none;
+        margin-top: 16px;
+      }
+
+      .audio-player-wrapper.show {
+        display: block;
+      }
+
+      #audioPreview {
+        width: 100%;
+        height: 44px;
+        border-radius: var(--radius-sm);
+        outline: none;
+      }
+
+      /* Predict button */
+      .predict-btn {
+        display: none;
+        width: 100%;
+        margin-top: 24px;
+        padding: 18px 32px;
+        border: none;
+        border-radius: var(--radius-md);
+        background: linear-gradient(135deg, #6366f1, #8b5cf6);
+        color: #fff;
+        font-family: inherit;
+        font-size: 1rem;
+        font-weight: 700;
+        cursor: pointer;
+        letter-spacing: 0.5px;
+        transition: all var(--transition);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .predict-btn.show {
+        display: block;
+      }
+
+      .predict-btn::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(135deg, #818cf8, #a78bfa);
+        opacity: 0;
+        transition: opacity var(--transition);
+      }
+
+      .predict-btn:hover::before {
+        opacity: 1;
+      }
+
+      .predict-btn:hover {
+        box-shadow: 0 8px 30px rgba(99, 102, 241, 0.4);
+        transform: translateY(-2px);
+      }
+
+      .predict-btn:active {
+        transform: translateY(0);
+      }
+
+      .predict-btn span {
+        position: relative;
+        z-index: 1;
+      }
+
+      .predict-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none !important;
+        box-shadow: none !important;
+      }
+
+      /* Loading spinner */
+      .spinner {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 2.5px solid rgba(255, 255, 255, 0.3);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: spin 0.7s linear infinite;
+        vertical-align: middle;
+        margin-right: 10px;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* ===== RESULTS ===== */
+      .results-section {
+        display: none;
+        margin-top: 40px;
+        animation: fadeUp 0.6s ease-out both;
+      }
+
+      .results-section.show {
+        display: block;
+      }
+
+      .results-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+        margin-bottom: 24px;
+      }
+
+      /* Top prediction hero card */
+      .result-hero {
+        grid-column: 1 / -1;
+        text-align: center;
+        padding: 44px 36px;
+        background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(34, 211, 238, 0.06));
+        border: 1px solid rgba(99, 102, 241, 0.2);
+      }
+
+      .result-hero__emoji {
+        font-size: 64px;
+        margin-bottom: 16px;
+        animation: bounceIn 0.6s ease-out both;
+      }
+
+      .result-hero__label {
+        font-size: 1.8rem;
+        font-weight: 800;
+        text-transform: capitalize;
+        letter-spacing: -0.5px;
+        margin-bottom: 8px;
+        background: linear-gradient(135deg, #f1f5f9, #818cf8);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .result-hero__confidence-row {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        margin-top: 12px;
+      }
+
+      .confidence-ring {
+        width: 64px;
+        height: 64px;
+        position: relative;
+      }
+
+      .confidence-ring svg {
+        transform: rotate(-90deg);
+      }
+
+      .confidence-ring__value {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: var(--success);
+      }
+
+      .confidence-label {
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+      }
+
+      @keyframes bounceIn {
+        0% {
+          opacity: 0;
+          transform: scale(0.5) translateY(20px);
+        }
+
+        60% {
+          transform: scale(1.15) translateY(-4px);
+        }
+
+        100% {
+          opacity: 1;
+          transform: scale(1) translateY(0);
+        }
+      }
+
+      /* Probability chart */
+      .chart-card {
+        grid-column: 1 / -1;
+      }
+
+      .chart-card h3 {
+        font-size: 1rem;
+        font-weight: 600;
+        margin-bottom: 20px;
+        color: var(--text-secondary);
+      }
+
+      .prob-bar-list {
+        list-style: none;
+      }
+
+      .prob-bar-item {
+        display: grid;
+        grid-template-columns: 40px 140px 1fr 60px;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      }
+
+      .prob-bar-item:last-child {
+        border-bottom: none;
+      }
+
+      .prob-bar-item__emoji {
+        font-size: 22px;
+        text-align: center;
+      }
+
+      .prob-bar-item__label {
+        font-size: 0.82rem;
+        font-weight: 500;
+        text-transform: capitalize;
+        color: var(--text-primary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .prob-bar-item__track {
+        height: 10px;
+        border-radius: 100px;
+        background: rgba(255, 255, 255, 0.06);
+        overflow: hidden;
+      }
+
+      .prob-bar-item__fill {
+        height: 100%;
+        border-radius: 100px;
+        background: linear-gradient(90deg, #6366f1, #22d3ee);
+        width: 0;
+        transition: width 1s cubic-bezier(0.25, 1, 0.5, 1);
+      }
+
+      .prob-bar-item.top .prob-bar-item__fill {
+        background: linear-gradient(90deg, #22d3ee, #6366f1);
+        box-shadow: 0 0 12px var(--success-glow);
+      }
+
+      .prob-bar-item__pct {
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: var(--text-muted);
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .prob-bar-item.top .prob-bar-item__pct {
+        color: var(--success);
+      }
+
+      /* ===== MODEL STATS ===== */
+      .stats-section {
+        margin-top: 40px;
+        animation: fadeUp 0.8s 0.3s ease-out both;
+      }
+
+      .stats-section h2 {
+        font-size: 1.25rem;
+        font-weight: 700;
+        margin-bottom: 20px;
+        color: var(--text-primary);
+      }
+
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+      }
+
+      .stat-card {
+        padding: 24px;
+        text-align: center;
+      }
+
+      .stat-card__value {
+        font-size: 2rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, #818cf8, #22d3ee);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 4px;
+      }
+
+      .stat-card__label {
+        font-size: 0.78rem;
+        font-weight: 500;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+
+      /* Supported classes showcase */
+      .classes-section {
+        margin-top: 40px;
+        animation: fadeUp 0.8s 0.45s ease-out both;
+      }
+
+      .classes-section h2 {
+        font-size: 1.25rem;
+        font-weight: 700;
+        margin-bottom: 20px;
+        color: var(--text-primary);
+      }
+
+      .classes-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+        gap: 12px;
+      }
+
+      .class-chip {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 16px;
+        background: var(--bg-card);
+        backdrop-filter: blur(12px);
+        border: 1px solid var(--glass-border);
+        border-radius: var(--radius-md);
+        transition: all var(--transition);
+        cursor: default;
+      }
+
+      .class-chip:hover {
+        border-color: var(--accent);
+        background: rgba(99, 102, 241, 0.08);
+        transform: translateY(-3px);
+        box-shadow: 0 6px 24px rgba(99, 102, 241, 0.15);
+      }
+
+      .class-chip__emoji {
+        font-size: 26px;
+      }
+
+      .class-chip__name {
+        font-size: 0.82rem;
+        font-weight: 600;
+        text-transform: capitalize;
+        color: var(--text-primary);
+      }
+
+      .class-chip__acc {
+        font-size: 0.7rem;
+        color: var(--text-muted);
+      }
+
+      /* ===== FOOTER ===== */
+      .footer {
+        text-align: center;
+        margin-top: 60px;
+        padding: 24px;
+        font-size: 0.8rem;
+        color: var(--text-muted);
+      }
+
+      .footer a {
+        color: var(--accent-light);
+        text-decoration: none;
+      }
+
+      .footer a:hover {
+        text-decoration: underline;
+      }
+
+      /* ===== ERROR TOAST ===== */
+      .toast {
+        position: fixed;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%) translateY(100px);
+        padding: 14px 28px;
+        background: rgba(244, 63, 94, 0.95);
+        backdrop-filter: blur(12px);
+        border-radius: var(--radius-md);
+        color: #fff;
+        font-size: 0.88rem;
+        font-weight: 500;
+        z-index: 999;
+        opacity: 0;
+        pointer-events: none;
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      .toast.show {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translateX(-50%) translateY(0);
+      }
+
+      /* ===== ANIMATIONS ===== */
+      @keyframes fadeUp {
+        from {
+          opacity: 0;
+          transform: translateY(24px);
+        }
+
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      /* ===== RESPONSIVE ===== */
+      @media (max-width: 700px) {
+        .app-container {
+          padding: 24px 16px 60px;
+        }
+
+        .card {
+          padding: 24px 18px;
+        }
+
+        .upload-zone {
+          padding: 40px 20px;
+        }
+
+        .prob-bar-item {
+          grid-template-columns: 32px 100px 1fr 50px;
+          gap: 8px;
+        }
+
+        .results-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .result-hero {
+          padding: 32px 20px;
+        }
+
+        .result-hero__label {
+          font-size: 1.4rem;
+        }
+
+        .stats-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+
+        .classes-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+
+      @media (max-width: 440px) {
+        .prob-bar-item {
+          grid-template-columns: 28px 80px 1fr 44px;
+          gap: 6px;
+        }
+
+        .prob-bar-item__label {
+          font-size: 0.73rem;
+        }
+
+        .classes-grid {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .stats-grid {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+  </style>
+</head>
+
+<body>
+
+  <!-- Animated Background -->
+  <div class="bg-canvas" aria-hidden="true">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+  </div>
+
+  <main class="app-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="header__badge">
+        <span class="dot"></span>
+        DL Model Active
+      </div>
+      <h1>U Sound - AI &nbsp;| Urban Sound &nbsp;Classifier</h1>
+
+      <p class="project-summary">This application showcases a classification model built with PyTorch trained to
+        recognize various common city sounds.</p>
+      <p>Upload an audio clip and our ResNet‑18 model will identify the urban sound in milliseconds.</p>
+    </header>
+
+    <!-- Upload Section -->
+    <section class="upload-section">
+      <div class="card">
+        <div class="upload-zone" id="uploadZone" role="button" tabindex="0" aria-label="Upload audio file">
+          <div class="upload-zone__icon">🎙️</div>
+          <h3>Drop your audio file here</h3>
+          <p>or <span class="browse-link">browse files</span> &nbsp;·&nbsp; WAV, MP3, FLAC, OGG</p>
+        </div>
+        <input type="file" id="audioFileInput" accept="audio/*" />
+
+        <!-- File Info Bar -->
+        <div class="file-info" id="fileInfo">
+          <span class="file-info__icon">🎵</span>
+          <div class="file-info__details">
+            <div class="file-info__name" id="fileName">—</div>
+            <div class="file-info__size" id="fileSize">—</div>
+          </div>
+          <button class="file-info__remove" id="removeFile" aria-label="Remove file">✕</button>
+        </div>
+
+        <!-- Waveform -->
+        <div class="waveform-container" id="waveformContainer">
+          <canvas id="waveformCanvas"></canvas>
+        </div>
+
+        <!-- Audio Player -->
+        <div class="audio-player-wrapper" id="audioPlayerWrapper">
+          <audio id="audioPreview" controls></audio>
+        </div>
+
+        <!-- Predict Button -->
+        <button class="predict-btn" id="predictBtn">
+          <span>🔬 Classify Sound</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Results Section -->
+    <section class="results-section" id="resultsSection">
+      <div class="results-grid">
+        <!-- Hero Prediction -->
+        <div class="card result-hero" id="resultHero">
+          <div class="result-hero__emoji" id="resultEmoji"></div>
+          <div class="result-hero__label" id="resultLabel"></div>
+          <div class="result-hero__confidence-row">
+            <div class="confidence-ring" id="confidenceRing">
+              <svg width="64" height="64" viewBox="0 0 64 64">
+                <circle cx="32" cy="32" r="28" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="5" />
+                <circle id="confidenceArc" cx="32" cy="32" r="28" fill="none" stroke="url(#grad)" stroke-width="5"
+                  stroke-linecap="round" stroke-dasharray="175.93" stroke-dashoffset="175.93" />
+                <defs>
+                  <linearGradient id="grad" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stop-color="#22d3ee" />
+                    <stop offset="100%" stop-color="#6366f1" />
+                  </linearGradient>
+                </defs>
+              </svg>
+              <span class="confidence-ring__value" id="confidenceValue">0%</span>
+            </div>
+            <span class="confidence-label">Confidence</span>
+          </div>
+        </div>
+
+        <!-- Probability Chart -->
+        <div class="card chart-card" id="chartCard">
+          <h3>📊 All Class Probabilities</h3>
+          <ul class="prob-bar-list" id="probBarList"></ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Model Stats -->
+    <section class="stats-section">
+      <h2>⚡ Model Performance</h2>
+      <div class="stats-grid">
+        <div class="card stat-card">
+          <div class="stat-card__value">87.8%</div>
+          <div class="stat-card__label">Validation Accuracy</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-card__value">ResNet-18</div>
+          <div class="stat-card__label">Architecture</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-card__value">10</div>
+          <div class="stat-card__label">Sound Classes</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-card__value">8,598</div>
+          <div class="stat-card__label">Training Samples</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Supported Classes -->
+    <section class="classes-section">
+      <h2>🎧 Supported Sound Categories</h2>
+      <div class="classes-grid" id="classesGrid"></div>
+    </section>
+
+    <section class="model-info-section">
+      <h3>🧠 Model Details</h3>
+      <p>The classifier is powered by a <strong>ResNet‑18</strong> convolutional neural network pretrained on ImageNet
+        and fine‑tuned on the UrbanSound8K dataset. The model was trained for 30 epochs with a cross‑entropy loss and
+        Adam optimizer, achieving over 87 % validation accuracy. During inference, the uploaded audio is transformed
+        into a mel‑spectrogram, fed into the network, and the class with the highest softmax probability is returned.
+      </p>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+      Built with PyTorch &amp; ResNet-18 · Trained on the <a
+        href="https://urbansounddataset.weebly.com/urbansound8k.html" target="_blank" rel="noopener">UrbanSound8K</a>
+      dataset
+    </footer>
+  </main>
+
+  <!-- Error Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script>
+    /* ===============================================================
+       CONFIG & EMOJI MAP
+    =============================================================== */
+    const CLASS_META = {
+      air_conditioner: { emoji: '𖣘', label: 'Air Conditioner', f1: '84.3%' },
+      car_horn: { emoji: '🚗', label: 'Car Horn', f1: '89.2%' },
+      children_playing: { emoji: '👶', label: 'Children Playing', f1: '84.9%' },
+      dog_bark: { emoji: '🐕', label: 'Dog Bark', f1: '83.8%' },
+      drilling: { emoji: '<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9c0 .6-.4 1-1 1H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9c.6 0 1 .4 1 1Z"/><path d="M18 6h4"/><path d="M14 4h3a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-3"/><path d="m5 10-2 8"/><path d="M12 10v3c0 .6-.4 1-1 1H8"/><path d="m7 18 2-8"/><path d="M5 22c-1.7 0-3-1.3-3-3 0-.6.4-1 1-1h7c.6 0 1 .4 1 1v2c0 .6-.4 1-1 1Z"/></svg>', label: 'Drilling', f1: '86.7%' },
+      engine_idling: { emoji: '🚛', label: 'Engine Idling', f1: '83.1%' },
+      gun_shot: { emoji: '💥', label: 'Gun Shot', f1: '100%' },
+      jackhammer: { emoji: '🔩', label: 'Jackhammer', f1: '91.7%' },
+      siren: { emoji: '🚨', label: 'Siren', f1: '92.4%' },
+      street_music: { emoji: '🎸', label: 'Street Music', f1: '91.3%' },
+    };
+
+    /* ===============================================================
+       DOM REFERENCES
+    =============================================================== */
+    const uploadZone = document.getElementById('uploadZone');
+    const fileInput = document.getElementById('audioFileInput');
+    const fileInfo = document.getElementById('fileInfo');
+    const fileName = document.getElementById('fileName');
+    const fileSize = document.getElementById('fileSize');
+    const removeFileBtn = document.getElementById('removeFile');
+    const waveformContainer = document.getElementById('waveformContainer');
+    const waveformCanvas = document.getElementById('waveformCanvas');
+    const audioPlayerWrap = document.getElementById('audioPlayerWrapper');
+    const audioPreview = document.getElementById('audioPreview');
+    const predictBtn = document.getElementById('predictBtn');
+    const resultsSection = document.getElementById('resultsSection');
+    const resultEmoji = document.getElementById('resultEmoji');
+    const resultLabel = document.getElementById('resultLabel');
+    const confidenceArc = document.getElementById('confidenceArc');
+    const confidenceValue = document.getElementById('confidenceValue');
+    const probBarList = document.getElementById('probBarList');
+    const classesGrid = document.getElementById('classesGrid');
+    const toast = document.getElementById('toast');
+
+    let selectedFile = null;
+
+    /* ===============================================================
+       POPULATE CLASSES GRID
+    =============================================================== */
+    Object.entries(CLASS_META).forEach(([key, meta]) => {
+      const chip = document.createElement('div');
+      chip.className = 'class-chip';
+      chip.innerHTML = `
+        <span class="class-chip__emoji">${meta.emoji}</span>
+        <div>
+          <div class="class-chip__name">${meta.label}</div>
+          <div class="class-chip__acc">F1: ${meta.f1}</div>
+        </div>`;
+      classesGrid.appendChild(chip);
+    });
+
+    /* ===============================================================
+       FILE UPLOAD HANDLERS
+    =============================================================== */
+    uploadZone.addEventListener('click', () => fileInput.click());
+    uploadZone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') fileInput.click(); });
+
+    ['dragover', 'dragenter'].forEach(evt =>
+      uploadZone.addEventListener(evt, e => { e.preventDefault(); uploadZone.classList.add('dragover'); }));
+    ['dragleave', 'drop'].forEach(evt =>
+      uploadZone.addEventListener(evt, e => { e.preventDefault(); uploadZone.classList.remove('dragover'); }));
+    uploadZone.addEventListener('drop', e => {
+      const files = e.dataTransfer.files;
+      if (files.length) handleFile(files[0]);
+    });
+
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files.length) handleFile(fileInput.files[0]);
+    });
+
+    removeFileBtn.addEventListener('click', clearFile);
+
+    function handleFile(file) {
+      if (!file.type.startsWith('audio/')) {
+        showToast('Please upload an audio file (WAV, MP3, FLAC, OGG).');
+        return;
+      }
+      selectedFile = file;
+      fileName.textContent = file.name;
+      fileSize.textContent = formatBytes(file.size);
+      fileInfo.classList.add('show');
+      predictBtn.classList.add('show');
+      resultsSection.classList.remove('show');
+
+      // Audio preview
+      const url = URL.createObjectURL(file);
+      audioPreview.src = url;
+      audioPlayerWrap.classList.add('show');
+
+      // Draw waveform
+      drawWaveform(file);
+    }
+
+    function clearFile() {
+      selectedFile = null;
+      fileInput.value = '';
+      fileInfo.classList.remove('show');
+      predictBtn.classList.remove('show');
+      waveformContainer.classList.remove('show');
+      audioPlayerWrap.classList.remove('show');
+      audioPreview.src = '';
+      resultsSection.classList.remove('show');
+    }
+
+    function formatBytes(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / 1048576).toFixed(1) + ' MB';
+    }
+
+    /* ===============================================================
+       WAVEFORM VISUALISATION
+    =============================================================== */
+    async function drawWaveform(file) {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const arrayBuffer = await file.arrayBuffer();
+        const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+        const raw = audioBuffer.getChannelData(0);
+
+        waveformContainer.classList.add('show');
+        const canvas = waveformCanvas;
+        const dpr = window.devicePixelRatio || 1;
+        const w = canvas.clientWidth;
+        const h = canvas.clientHeight;
+        canvas.width = w * dpr;
+        canvas.height = h * dpr;
+        const c = canvas.getContext('2d');
+        c.scale(dpr, dpr);
+
+        // Downsample
+        const samples = w;
+        const step = Math.floor(raw.length / samples);
+        const peaks = [];
+        for (let i = 0; i < samples; i++) {
+          let min = 1, max = -1;
+          for (let j = 0; j < step; j++) {
+            const v = raw[i * step + j] || 0;
+            if (v < min) min = v;
+            if (v > max) max = v;
+          }
+          peaks.push({ min, max });
+        }
+
+        // Draw with gradient
+        const grad = c.createLinearGradient(0, 0, w, 0);
+        grad.addColorStop(0, '#6366f1');
+        grad.addColorStop(0.5, '#818cf8');
+        grad.addColorStop(1, '#22d3ee');
+
+        c.clearRect(0, 0, w, h);
+        const mid = h / 2;
+        peaks.forEach((p, i) => {
+          const x = i;
+          const top = mid + p.min * mid * 0.9;
+          const bot = mid + p.max * mid * 0.9;
+          c.fillStyle = grad;
+          c.fillRect(x, top, 1, bot - top || 1);
+        });
+
+        ctx.close();
+      } catch (err) {
+        console.warn('Waveform draw error:', err);
+      }
+    }
+
+    /* ===============================================================
+       PREDICTION
+    =============================================================== */
+    predictBtn.addEventListener('click', async () => {
+      if (!selectedFile) return;
+      predictBtn.disabled = true;
+      // loading overlay removed (no overlay element)
+      predictBtn.innerHTML = '<span><span class="spinner"></span>Analyzing Sound…</span>';
+      resultsSection.classList.remove('show');
+
+      try {
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+
+        const baseUrl = window.location.protocol === 'file:' ? 'http://127.0.0.1:5000' : '';
+        const res = await fetch(baseUrl + '/predict', { method: 'POST', body: formData });
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || 'Server error');
+
+        renderResults(data);
+      } catch (err) {
+        showToast(err.message || 'Prediction failed. Is the server running?');
+      } finally {
+        predictBtn.disabled = false;
+        predictBtn.innerHTML = '<span>🔬 Classify Sound</span>';
+      }
+    });
+
+    /* ===============================================================
+       RENDER RESULTS
+    =============================================================== */
+    function renderResults(data) {
+      const { label, confidence, probabilities, classes } = data;
+      const meta = CLASS_META[label] || { emoji: '🔊', label: label };
+
+      // Hero
+      resultEmoji.innerHTML = meta.emoji;
+      resultLabel.textContent = meta.label;
+
+      // Confidence ring
+      const pct = Math.round(confidence * 100);
+      confidenceValue.textContent = pct + '%';
+      const circumference = 2 * Math.PI * 28; // r=28
+      const offset = circumference * (1 - confidence);
+      confidenceArc.style.transition = 'none';
+      confidenceArc.style.strokeDashoffset = circumference;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          confidenceArc.style.transition = 'stroke-dashoffset 1.2s cubic-bezier(0.25, 1, 0.5, 1)';
+          confidenceArc.style.strokeDashoffset = offset;
+        });
+      });
+
+      // Probability bars
+      probBarList.innerHTML = '';
+      const pairs = classes.map((cls, i) => ({ cls, prob: probabilities[i] }));
+      pairs.sort((a, b) => b.prob - a.prob);
+
+      pairs.forEach((p, idx) => {
+        const m = CLASS_META[p.cls] || { emoji: '🔊', label: p.cls };
+        const isTop = idx === 0;
+        const li = document.createElement('li');
+        li.className = 'prob-bar-item' + (isTop ? ' top' : '');
+        li.innerHTML = `
+          <span class="prob-bar-item__emoji">${m.emoji}</span>
+          <span class="prob-bar-item__label">${m.label}</span>
+          <div class="prob-bar-item__track">
+            <div class="prob-bar-item__fill" data-width="${(p.prob * 100).toFixed(1)}%"></div>
+          </div>
+          <span class="prob-bar-item__pct">${(p.prob * 100).toFixed(1)}%</span>`;
+        probBarList.appendChild(li);
+      });
+
+      resultsSection.classList.add('show');
+
+      // Animate bars after layout
+      requestAnimationFrame(() => {
+        document.querySelectorAll('.prob-bar-item__fill').forEach(bar => {
+          bar.style.width = bar.dataset.width;
+        });
+      });
+
+      // Scroll into view
+      resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    /* ===============================================================
+       TOAST
+    =============================================================== */
+    function showToast(msg) {
+      toast.textContent = msg;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 4000);
+    }
+  </script>
+</body>
+
+</html>
