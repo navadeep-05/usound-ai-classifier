@@ -1,4 +1,4 @@
-torch.set_num_threads(1)
+
 
 import os
 import tempfile
@@ -11,6 +11,7 @@ import torch.nn.functional as F
 import torchvision
 import librosa
 
+torch.set_num_threads(1)
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
