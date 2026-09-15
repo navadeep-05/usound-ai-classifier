@@ -1,0 +1,23 @@
+{
+  "class_names": [
+    "air_conditioner",
+    "car_horn",
+    "children_playing",
+    "dog_bark",
+    "drilling",
+    "engine_idling",
+    "gun_shot",
+    "jackhammer",
+    "siren",
+    "street_music"
+  ],
+  "config": {
+    "SAMPLE_RATE": 22050,
+    "DURATION": 4.0,
+    "N_MELS": 128,
+    "N_FFT": 1024,
+    "HOP_LENGTH": 512,
+    "TOP_DB": 80
+  },
+  "n_frames": 173
+}

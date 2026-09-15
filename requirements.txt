@@ -3,4 +3,5 @@ flask-cors
 librosa
 soundfile
 numpy
+onnxruntime
 gunicorn

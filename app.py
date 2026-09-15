@@ -1,74 +1,59 @@
-
-
 import os
+import json
 import tempfile
 import numpy as np
-from flask import Flask, request, jsonify, make_response, send_from_directory
+from flask import Flask, request, jsonify
 from flask_cors import CORS
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torchvision
 import librosa
+import onnxruntime as ort
 
-torch.set_num_threads(1)
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
-# PROJECT_ROOT is the directory containing app.py and all project files.
 PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
 app = Flask(__name__, static_folder=PROJECT_ROOT, static_url_path='')
 CORS(app)
-app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # disable caching for static assets
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 
-# The real checkpoint from the Kaggle notebook, unzipped into this folder.
-MODEL_PATH = os.path.join(PROJECT_ROOT, 'Urban_Notebook_results', 'best_model.pt')
+MODEL_DIR = os.path.join(PROJECT_ROOT, 'Urban_Notebook_results')
+ONNX_PATH = os.path.join(MODEL_DIR, 'best_model.onnx')
+META_PATH = os.path.join(MODEL_DIR, 'model_meta.json')
 
 # ---------------------------------------------------------------------------
-# Model loading — rebuild the ResNet18 architecture, then load the weights.
-# The checkpoint is a dict (model_state_dict + class_names + config), not a
-# raw model object, so torch.load(...).eval() (the old code) can never work.
+# Model loading — onnxruntime instead of torch/torchvision.
+# This removes ~1GB+ of import/runtime memory overhead, which is what was
+# causing the free-tier Render instance (512MB RAM) to silently crash mid
+# -request during real inference (torch + torchvision + a loaded ResNet-18
+# + librosa's own buffers routinely exceeded that ceiling).
 # ---------------------------------------------------------------------------
-def build_model(num_classes):
-    m = torchvision.models.resnet18(weights=None)
-    in_feats = m.fc.in_features
-    m.fc = nn.Sequential(nn.Dropout(0.3), nn.Linear(in_feats, num_classes))
-    return m
-
-model = None
+session = None
 class_names = None
 CONFIG = None
 
-if os.path.exists(MODEL_PATH):
+if os.path.exists(ONNX_PATH) and os.path.exists(META_PATH):
     try:
-        checkpoint = torch.load(MODEL_PATH, map_location='cpu')
-        CONFIG = checkpoint["config"]
-        class_names = checkpoint["class_names"]          # always read from checkpoint, never hardcode
-        model = build_model(len(class_names))
-        model.load_state_dict(checkpoint["model_state_dict"])
-        model.eval()
-        print(f"[OK] Model loaded successfully from {MODEL_PATH}")
+        with open(META_PATH) as f:
+            meta = json.load(f)
+        class_names = meta["class_names"]
+        CONFIG = meta["config"]
+        session = ort.InferenceSession(ONNX_PATH, providers=["CPUExecutionProvider"])
+        print(f"[OK] ONNX model loaded successfully from {ONNX_PATH}")
         print(f"     Classes: {class_names}")
-        print(f"     Training val acc: {checkpoint.get('best_val_acc', 'n/a')}")
     except Exception as e:
-        print(f"[ERROR] Failed to load model from {MODEL_PATH}: {e}")
-        model = None
+        print(f"[ERROR] Failed to load ONNX model from {ONNX_PATH}: {e}")
+        session = None
 else:
-    print(f"[ERROR] Model file not found at {MODEL_PATH}. "
-          f"Check that Urban_Notebook_results/best_model.pt exists.")
+    print(f"[ERROR] Missing {ONNX_PATH} or {META_PATH}. "
+          f"Run the ONNX export step and commit both files.")
 
-# Fallback label list (only used if the checkpoint truly can't be loaded,
-# so the API doesn't crash — but this should never be hit once the path
-# above is correct).
 LABELS = class_names or [
     "air_conditioner", "car_horn", "children_playing", "dog_bark", "drilling",
     "engine_idling", "gun_shot", "jackhammer", "siren", "street_music",
 ]
 
 # ---------------------------------------------------------------------------
-# Preprocessing — MUST exactly match what the notebook used for training:
-# librosa (not torchaudio), same sample rate / duration / mel params, and
-# the same per-clip min-max normalization.
+# Preprocessing — identical to training: Librosa, same sample rate/duration/
+# mel params, same per-clip min-max normalization.
 # ---------------------------------------------------------------------------
 def load_fixed_length_audio(path, sr, duration):
     y, _ = librosa.load(path, sr=sr, mono=True)
@@ -85,21 +70,24 @@ def extract_logmel(y, sr, n_mels, n_fft, hop_length, top_db):
     logmel = (logmel - logmel.min()) / (logmel.max() - logmel.min() + 1e-6)
     return logmel.astype(np.float32)
 
-def predict_from_file(path, top_k=5):
+def softmax(x):
+    e = np.exp(x - np.max(x))
+    return e / e.sum()
+
+def predict_from_file(path):
     """Returns (label, confidence, full_probs_list_in_LABELS_order)."""
-    if model is None:
+    if session is None:
         raise RuntimeError(
-            "Model is not loaded — check the MODEL_PATH and the server startup logs."
+            "Model is not loaded — check ONNX_PATH/META_PATH and the server startup logs."
         )
 
     y = load_fixed_length_audio(path, CONFIG["SAMPLE_RATE"], CONFIG["DURATION"])
     arr = extract_logmel(y, CONFIG["SAMPLE_RATE"], CONFIG["N_MELS"],
                           CONFIG["N_FFT"], CONFIG["HOP_LENGTH"], CONFIG["TOP_DB"])
-    x = torch.from_numpy(arr).float().unsqueeze(0).repeat(3, 1, 1).unsqueeze(0)  # (1,3,n_mels,n_frames)
+    x = np.repeat(arr[np.newaxis, :, :], 3, axis=0)[np.newaxis, :, :, :].astype(np.float32)  # (1,3,n_mels,n_frames)
 
-    with torch.no_grad():
-        logits = model(x)
-        probs = F.softmax(logits, dim=1)[0].numpy()
+    logits = session.run(None, {"input": x})[0][0]
+    probs = softmax(logits)
 
     top_idx = int(probs.argmax())
     return class_names[top_idx], float(probs[top_idx]), probs.tolist()
@@ -115,9 +103,6 @@ def predict():
     if file.filename == '':
         return jsonify({"error": "No selected file"}), 400
 
-    # Save to a temp file: librosa/soundfile need a real path or seekable
-    # file-like object; saving to disk is the most robust option across
-    # audio formats and avoids subtle stream-position bugs.
     suffix = os.path.splitext(file.filename)[1] or ".wav"
     tmp_path = None
     try:
@@ -131,7 +116,7 @@ def predict():
             "label": label,
             "confidence": confidence,
             "probabilities": probabilities,
-            "classes": class_names,   # so the frontend can zip labels <-> probabilities correctly
+            "classes": class_names,
         })
     except Exception as e:
         return jsonify({"error": f"Prediction failed: {e}"}), 500
@@ -142,12 +127,11 @@ def predict():
 @app.route('/health', methods=['GET'])
 def health():
     return jsonify({
-        "model_loaded": model is not None,
-        "model_path": MODEL_PATH,
+        "model_loaded": session is not None,
+        "model_path": ONNX_PATH,
         "classes": class_names,
     })
 
-# Serve the UI entry point
 @app.route('/')
 def serve_index():
     return app.send_static_file('index.html')
