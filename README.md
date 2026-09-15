@@ -29,6 +29,11 @@ Urban Sound classification/
 *The UI (`public/index.html`) communicates with the API via a simple `fetch` POST request.*
 
 ---
+## 🌐 application usage
+You can work using this web application by uploading basic sound files and checking the results in instance.
+https://urban-sound-classifier.onrender.com/
+
+---
 
 ## 🛠️ Core Technologies
 - **Python 3.14** – server side.
